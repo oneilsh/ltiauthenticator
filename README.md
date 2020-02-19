@@ -1,6 +1,7 @@
 # LTI Launch JupyterHub Authenticator
 
-[![Build Status](https://travis-ci.org/jupyterhub/ltiauthenticator.svg?branch=master)](https://travis-ci.org/jupyterhub/ltiauthenticator)
+[![TravisCI build status](https://img.shields.io/travis/jupyterhub/ltiauthenticator/master?logo=travis)](https://travis-ci.org/jupyterhub/ltiauthenticator)
+[![Latest PyPI version](https://img.shields.io/pypi/v/jupyterhub-ltiauthenticator?logo=pypi)](https://pypi.python.org/pypi/jupyterhub-ltiauthenticator)
 
 Implements [LTI v1](http://www.imsglobal.org/specs/ltiv1p1p1/implementation-guide) authenticator for use with JupyterHub.
 
@@ -129,7 +130,8 @@ _Note_: You will see **Client Secret** and **Secret Key** used interchangably.
 
     _Note_: Anyone with these two strings will be able to access your hub, so keep them secure!!
 
-2.  Create an application in Canvas. You can name it anything but you'll be using it throughout Canvas to refer to your hub, so make it
+2.  [Add a new external app configuration in Canvas](https://community.canvaslms.com/docs/DOC-13135-415257103).
+    You can name it anything, but you'll be using it throughout Canvas to refer to your hub, so make it
     something meaningful and unique. Note that the right to create applications might be limited by your
     institution. The basic information required to create an application in Canvas' "Manual entry" mode is:
 
@@ -185,7 +187,7 @@ _Note_: You will see **Client Secret** and **Secret Key** used interchangably.
 
     1.  Make the submission type an external tool
     2.  **IMPORTANT:** Click "Find" and search for the tool you added in step 2. Click that and it will prepopulate the URL field with the one you supplied when creating the application. Using the "find" button to search for your tool is necessary to ensure the LTI key and secret are sent with the launch request.
-    3.  Check the "Launch in a new window" checkbox.
+    3.  Check the "Launch in a new tab" checkbox.
     4.  Append any custom parameters you wish (see next step)
 
     Note: If you are creating assignments via the Canvas API, you need to use [these undocumented external tool fields](https://github.com/instructure/canvas-lms/issues/1315) when creating the assignment.
@@ -209,6 +211,66 @@ _Note_: You will see **Client Secret** and **Secret Key** used interchangably.
 6.  You are done! You can click the link to see what the user workflow would look
     like. You can repeat step 7 in all the units that should have a link to the
     Hub for the user.
+
+## Moodle
+
+The Moodle setup is very similar to both the examples outlined above.
+
+1. You need to be a Moodle Administrator, or have another Moodle Role that gives you
+   Permissions to manage Activity Modules.
+
+2. You need to have enabled the ['External Tool'](https://docs.moodle.org/37/en/External_tool) Activity Module in your Moodle environment
+
+3. Create an *client-key* for use by Moodle against your hub. You can do so by
+   running `openssl rand -hex 32` and saving the output.
+
+4. Create an *client-secret* for use by Moodle against your hub. You can do so by
+   running `openssl rand -hex 32` and saving the output.
+
+5. If you are running Jupyterhub locally, you need to Configure it to accept LTI Launch requests from Moodle. You do this by
+   enabling the LTI Authenticator class and giving JupyterHub access to the client key & secret generated in steps 3 and 4.
+
+   juptyerhub_config.py:
+```python
+   c.JupyterHub.authenticator_class = 'ltiauthenticator.LTIAuthenticator'
+
+   c.LTIAuthenticator.consumers = {
+       "client-key": "client-secret"
+   }
+```
+
+6. If you are running Jupyterhub within a Kubernetes Cluster, deployed using helm, you need to
+   supply the client key & secret via the chart yaml configuration.
+
+   config.yaml:
+
+```yaml
+    auth:
+      type: "lti"
+      lti:
+          consumers: { 
+              "client-key"": "client-secret"
+              }
+```
+
+7. If your Moodle environment is using https, you should also use https for your Jupyterhub.
+
+8. Once you hub is up and running with the new LTI configuration, you can now configure Moodle.
+
+9. In the Moodle course you wish to add, turn on editing, and add an instance of the External Tool Activity Module (https://docs.moodle.org/37/en/External_tool_settings)
+Activtiy Name: This will be the name that appears in the course for students to click on to initate
+    the connection to your hub.
+Click 'Show more...'
+    * Tool name: 
+    * Tool URL: Should be set to `your-hub-url/hub/lti/launch`. So if your hub
+   is accessible at `https://datahub.berkeley.edu`, **Tool URL** should be
+   `https://datahub.berkeley.edu/hub/lti/launch`
+    * Consumer Key: *client key*
+    * Shared secret: *client secret*
+    * Custom parameters: 
+    * Default launch container: This setting will define how the hub is presented to the student, whether it's embedded within a Moodle, with or without blocks, replaces the current window, or is displayed in a new window.
+
+10. Click 'Save and return to course' or 'Save and display', you will them either be returned to the course page, or have you hub displayed.
 
 ## Notes
 
