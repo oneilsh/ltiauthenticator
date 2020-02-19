@@ -1,6 +1,6 @@
 import time
 
-from traitlets import Bool, Dict, Unicode
+from traitlets import Bool, Dict, Unicode, CRegExp
 from tornado import gen, web
 
 from jupyterhub.auth import Authenticator
@@ -9,6 +9,8 @@ from jupyterhub.utils import url_path_join
 
 from oauthlib.oauth1.rfc5849 import signature
 from collections import OrderedDict
+
+import re
 
 __version__ = '0.4.1.dev'
 
@@ -118,6 +120,23 @@ class LTIAuthenticator(Authenticator):
         """
     )
 
+    user_id_regex = CRegExp(
+        None,
+        allow_none=True,
+        config=True,
+        help="""
+        Regex with capture group to extract username from user_id_key.
+
+        Example: if usernames come in as username@institution.edu, using
+        
+        c.LTIAuthenticator.user_id_regex = "(^[^@]+)@.+" 
+        
+        results in username being used rather than the entire email.
+
+        This option is only used when user_id_key is set.
+        """
+    )
+
     user_id_key = Unicode(
         None,
         allow_none=True,
@@ -174,6 +193,10 @@ class LTIAuthenticator(Authenticator):
         ):
             if self.user_id_key:
                 user_id = args[self.user_id_key]
+                if self.user_id_regex:
+                    match_groups = re.match(self.user_id_regex, user_id).groups()
+                    if len(match_groups) > 0:
+                        user_id = match_groups[0]
             else:
                 # Backwards compatible behavior, since we don't want hubs to have to
                 # migrate usernames.
