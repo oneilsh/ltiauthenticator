@@ -1,6 +1,6 @@
 import time
 
-from traitlets import Bool, Dict, Unicode, CRegExp
+from traitlets import Bool, Dict, Unicode, CRegExp, List
 from tornado import gen, web
 
 from jupyterhub.auth import Authenticator
@@ -120,6 +120,27 @@ class LTIAuthenticator(Authenticator):
         """
     )
 
+    user_admin_roles = List(
+        None,
+        allow_none=True,
+        config=True,
+        help="""
+        A list of LTI roles that designate admin priveledges. 
+
+        Both 'roles' and 'ext_roles' are interrogated, and each specified entry is matched against
+        the suffix of the returned roles. For example, ext_role as returned by LTI may be
+
+        'urn:lti:instrole:ims/lis/Instructor,urn:lti:instrole:ims/lis/Student,urn:lti:role:ims/lis/Instructor,urn:lti:role:ims/lis/Learner/NonCreditLearner',
+
+        using: 
+
+        c.LTIAuthenticator.user_admin_roles = ['Instructor', 'TA']
+
+        results in user.admin being set to True via match against the suffix of the first and third listed roles. 
+        Longer suffixes can be used, as in ['instrole:ims/lis/Instructor'] to require that role specification (matching only the first). 
+        """
+    )
+
     user_id_regex = CRegExp(
         None,
         allow_none=True,
@@ -208,8 +229,24 @@ class LTIAuthenticator(Authenticator):
                 # If Canvas is running in anonymous mode, we'll still want the 'user_id' (which is the `lti_user_id``)
                 user_id = args.get('custom_canvas_user_id', args['user_id'])
 
+            is_admin = False
+            if self.user_admin_roles:
+                for role_query in self.user_admin_roles:
+                    ext_roles = args.get('ext_roles', None)
+                    if ext_roles:
+                        for role in ext_roles.split(","):
+                            if role.endswith(role_query):
+                                is_admin = True
+
+                    roles = args.get('roles', None)
+                    if roles:
+                        for role in roles.split(","):
+                            if role.endswith(role_query):
+                                is_admin = True
+
             return {
                 'name': user_id,
+                'admin': is_admin,
                 'auth_state': {k: v for k, v in args.items() if not k.startswith('oauth_')}
             }
 
