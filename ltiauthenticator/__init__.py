@@ -11,6 +11,7 @@ from oauthlib.oauth1.rfc5849 import signature
 from collections import OrderedDict
 
 import re
+import sys
 
 __version__ = '0.4.1.dev'
 
@@ -231,15 +232,18 @@ class LTIAuthenticator(Authenticator):
 
             is_admin = False
             if self.user_admin_roles:
+                sys.stderr.write("Checking query roles: " + str(self.user_admin_roles) + "\n")
                 for role_query in self.user_admin_roles:
                     ext_roles = args.get('ext_roles', None)
                     if ext_roles:
+                        sys.stderr.write("... against ext_roles: " + str(ext_roles) + "\n")
                         for role in ext_roles.split(","):
                             if role.endswith(role_query):
                                 is_admin = True
 
                     roles = args.get('roles', None)
                     if roles:
+                        sys.stderr.write("... and against roles: " + str(roles) + "\n")
                         for role in roles.split(","):
                             if role.endswith(role_query):
                                 is_admin = True
