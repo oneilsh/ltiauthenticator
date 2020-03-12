@@ -128,12 +128,8 @@ class LTIAuthenticator(Authenticator):
         help="""
         A list of LTI roles that designate admin priveledges. 
 
-        Both 'roles' and 'ext_roles' are interrogated, and each specified entry is matched against
-        the suffix of the returned roles. For example, ext_role as returned by LTI may be
-
-        'urn:lti:instrole:ims/lis/Instructor,urn:lti:instrole:ims/lis/Student,urn:lti:role:ims/lis/Instructor,urn:lti:role:ims/lis/Learner/NonCreditLearner',
-
-        using: 
+        'roles' are interrogated, and each specified entry is matched against
+        the suffix of the returned roles. For example, roles as returned by LTI may be 'Instructor', using
 
         c.LTIAuthenticator.user_admin_roles = ['Instructor', 'TA']
 
