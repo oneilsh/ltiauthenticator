@@ -12,8 +12,9 @@ from collections import OrderedDict
 
 import re
 import sys
+import pprint
 
-__version__ = '0.4.1.dev'
+__version__ = '0.4.3'
 
 class LTILaunchValidator:
     # Record time when process starts, so we can reject requests made
@@ -140,8 +141,8 @@ class LTIAuthenticator(Authenticator):
 
 
     user_id_regexes = List(
+        default_value=None,
         trait=CRegExp,
-        None,
         allow_none=True,
         config=True,
         help="""
@@ -155,8 +156,8 @@ class LTIAuthenticator(Authenticator):
     )
 
     user_id_keys = List(
+        default_value=None,
         trait=Unicode,
-        None,
         allow_none=True,
         config=True,
         help="""
@@ -224,6 +225,11 @@ class LTIAuthenticator(Authenticator):
 
         launch_url = protocol + "://" + handler.request.host + handler.request.uri
 
+        # TODO: sys.stderr isn't the write way to write hub logs in k8s-hub, need to use a jh-specific log handler of some sort I think
+        sys.stderr.write("Launch args: \n")
+        args_str = pprint.pformat(args, indent=2)
+        sys.stderr.write(args_str + "\n")
+
         if validator.validate_launch_request(
                 launch_url,
                 handler.request.headers,
@@ -241,12 +247,16 @@ class LTIAuthenticator(Authenticator):
                         # if the key is in the results...
                         if user_id_key in args:
                             given_id = args[user_id_key]
-                            match_groups = re.match(user_id_regex, given_id).groups()
+                            sys.stderr.write("Checking " + user_id_key + " containing " + given_id + " against " + str(user_id_regex) + "\n")
+                            match = re.match(user_id_regex, given_id)
                             # and it matches the first capture group...
-                            if len(match_groups) > 0:
-                                # set the user_id to the capture group and exit the loop
-                                user_id = match_groups[0]
-                                break    # ugh, break
+                            if match:
+                                sys.stderr.write("found... " + str(match) + "\n")
+                                match_groups = match.groups()
+                                if len(match_groups) > 0:
+                                    # set the user_id to the capture group and exit the loop
+                                    user_id = match_groups[0]
+                                    break    # ugh, break
             else:
                 # Backwards compatible behavior, since we don't want hubs to have to
                 # migrate usernames.
@@ -257,6 +267,7 @@ class LTIAuthenticator(Authenticator):
                 # If this is the case we want to use the canvas ID to allow grade returns through the Canvas API
                 # If Canvas is running in anonymous mode, we'll still want the 'user_id' (which is the `lti_user_id``)
                 user_id = args.get('custom_canvas_user_id', args['user_id'])
+
 
             is_admin = False
             if self.user_admin_roles:
