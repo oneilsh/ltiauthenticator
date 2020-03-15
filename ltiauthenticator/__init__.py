@@ -138,34 +138,54 @@ class LTIAuthenticator(Authenticator):
         """
     )
 
-    user_id_regex = CRegExp(
+
+    user_id_regexes = List(
+        trait=CRegExp,
         None,
         allow_none=True,
         config=True,
         help="""
-        Regex with capture group to extract username from user_id_key.
-
-        Example: if usernames come in as username@institution.edu, using
+        Regexes with capture group (one each) to extract username from user_id_keys.
+        See help for user_id_keys for more complete examples.
         
-        c.LTIAuthenticator.user_id_regex = "(^[^@]+)@.+" 
+        c.LTIAuthenticator.user_id_regex = ["(^[^@]+)@.+"]
         
-        results in username being used rather than the entire email.
-
         This option is only used when user_id_key is set.
         """
     )
 
-    user_id_key = Unicode(
+    user_id_keys = List(
+        trait=Unicode,
         None,
         allow_none=True,
         config=True,
         help="""
-        Key present in LTI launch info to be used as username.
+        List of keys potentially present in LTI launch info to be used as username.
 
 
         Common options are:
-          - User's email address: lis_person_contact_email_primary
-          - Anonymized user id: user_id
+          - User's custom canvas login id: ["custom_canvas_user_login_id"]
+          - User's email address: ["lis_person_contact_email_primary"]
+          - Anonymized user id: ["user_id"]
+
+        It may be that your LMS provides a key for some users, but not others. For example, 'normal' users may have an 
+        entry for custom_canvas_user_login_id, but those coming from social logins may not. Use a list of entries to check for in order:
+        ["custom_canvas_user_login_id", "lis_person_contact_email_primary", "user_id"]
+
+        Each of these will be checked a) for existance, and then b) against entries in user_id_regexes; if the key isn't present,
+        or the value doesn't match the corresponding regex, the check will fall to the next in line. (The length of each list should
+        be the same!)
+
+        Repeating entries allows more flexility; in our case custom_canvas_user_login_id is either 1) not set (if the login is a social login),
+        2) an email address (normal user login), or 3) a random long hex identifier. For 1), we want to move onto lis_person_contact_email_primary (provided by social login),
+        for 2) we want to extract what is before the @, and for 3) we just want to grab the first 6 characters to keep the username short.
+
+        Here's the recipe for that:
+
+        c.LTIAuthenticator.user_id_keys = ["custom_canvas_user_login_id", "custom_canvas_user_login_id", "lis_person_contact_email_primary"]
+        c.LTIAuthenticator.user_id_regexes = ["(^[^@]+)@.+", "(^[0-9a-f]{6,6})[0-9a-f]*$", "(^[^@]+)@.+"]
+
+        user_id (which is a randomized user id and should always be present (right?)) is used as a fallback with ".*". 
 
         Your LMS (Canvas / EdX / whatever) might provide additional
         keys in the LTI launch that you can use. Usually these are
@@ -209,12 +229,24 @@ class LTIAuthenticator(Authenticator):
                 handler.request.headers,
                 args
         ):
-            if self.user_id_key:
-                user_id = args[self.user_id_key]
-                if self.user_id_regex:
-                    match_groups = re.match(self.user_id_regex, user_id).groups()
-                    if len(match_groups) > 0:
-                        user_id = match_groups[0]
+            if self.user_id_keys and self.user_id_regexes:
+                if len(self.user_id_keys) == len(self.user_id_regexes):
+                    ## ensure user_id is used as a fallback
+                    self.user_id_keys.append("user_id")
+                    self.user_id_regexes.append(".*")
+                    # for each potential key/regex match...
+                    for i in range(0, len(self.user_id_keys)):
+                        user_id_key = self.user_id_keys[i]
+                        user_id_regex = self.user_id_regexes[i]
+                        # if the key is in the results...
+                        if user_id_key in args:
+                            given_id = args[user_id_key]
+                            match_groups = re.match(user_id_regex, given_id).groups()
+                            # and it matches the first capture group...
+                            if len(match_groups) > 0:
+                                # set the user_id to the capture group and exit the loop
+                                user_id = match_groups[0]
+                                break    # ugh, break
             else:
                 # Backwards compatible behavior, since we don't want hubs to have to
                 # migrate usernames.
